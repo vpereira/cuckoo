@@ -38,7 +38,7 @@ class AnalysisManager(Thread):
     def init_storage(self):
         """Initialize analyses storage folder.
         @raise CuckooAnalysisError: if storage folder already exists."""
-        self.analysis.results_folder = os.path.join(os.path.join(os.getcwd(), "storage/analyses/"), str(self.task.id))
+        self.analysis.results_folder = os.path.join(os.path.join(os.getcwd(), "storage", "analyses"), str(self.task.id))
 
         if os.path.exists(self.analysis.results_folder):
             raise CuckooAnalysisError("Analysis results folder already exists at path \"%s\", analysis aborted" % self.analysis.results_folder)
@@ -49,7 +49,7 @@ class AnalysisManager(Thread):
         """Store sample file.
         @raise CuckooAnalysisError: if unable to store file."""
         md5 = File(self.task.file_path).get_md5()
-        self.analysis.stored_file_path = os.path.join(os.path.join(os.getcwd(), "storage/binaries/"), md5)
+        self.analysis.stored_file_path = os.path.join(os.path.join(os.getcwd(), "storage", "binaries"), md5)
 
         if os.path.exists(self.analysis.stored_file_path):
             log.info("File already exists at \"%s\"" % self.analysis.stored_file_path)
@@ -111,8 +111,12 @@ class AnalysisManager(Thread):
                 break
 
         # Initialize sniffer
-        sniffer = Sniffer(self.cfg.cuckoo.tcpdump)
-        sniffer.start(interface=self.cfg.cuckoo.interface, host=vm.ip, file_path=os.path.join(self.analysis.results_folder, "dump.pcap"))
+        if self.cfg.cuckoo.use_sniffer:
+            sniffer = Sniffer(self.cfg.cuckoo.tcpdump)
+            sniffer.start(interface=self.cfg.cuckoo.interface, host=vm.ip, file_path=os.path.join(self.analysis.results_folder, "dump.pcap"))
+        else:
+            sniffer = False
+
         # Start machine
         try:
             mmanager.start(vm.label)
@@ -125,7 +129,9 @@ class AnalysisManager(Thread):
         # Wait for analysis to complete
         success = guest.wait_for_completion()
         # Stop sniffer
-        sniffer.stop()
+        if sniffer:
+            sniffer.stop()
+
         if not success:
             raise CuckooAnalysisError("Analysis failed, review previous errors")
         # Save results
@@ -136,6 +142,8 @@ class AnalysisManager(Thread):
         mmanager.release(vm.label)
         # Launch reports generation
         Reporter(self.analysis.results_folder).run(Processor(self.analysis.results_folder).run())
+
+        log.info("Reports generation completed (path=%s)" % self.analysis.results_folder)
 
     def run(self):
         """Run manager thread."""

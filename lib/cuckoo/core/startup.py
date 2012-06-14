@@ -32,7 +32,7 @@ def check_working_directory():
         raise CuckooStartupError("You are not running Cuckoo from it's root directory")
 
 def check_dependencies():
-    """Checks if dependencies ara installed.
+    """Checks if dependencies are installed.
     @raise CuckooStartupError: if dependencies aren't met.
     """
     check_python_version()
@@ -47,13 +47,26 @@ def check_dependencies():
 
     return True
 
+def check_configs():
+    """Checks if config files exist.
+    @raise CuckooStartupError: if config files do not exist.
+    """
+    configs = [os.path.join(CUCKOO_ROOT, "conf", "cuckoo.conf"),
+               os.path.join(CUCKOO_ROOT, "conf", "reporting.conf")]
+
+    for config in configs:
+        if not os.path.exists(config):
+            raise CuckooStartupError("Config file does not exist at path: %s" % config)
+
+    return True
+
 def create_structure():
     """Creates Cuckoo directories."""
-    folders = ["db/",
-               "log/",
-               "storage/",
-               "storage/analyses/",
-               "storage/binaries/"]
+    folders = ["db",
+               "log",
+               "storage",
+               "storage/analyses",
+               "storage/binaries"]
 
     create_folders(folders=folders)
 
@@ -63,7 +76,7 @@ def init_logging():
     sh = logging.StreamHandler()
     sh.setFormatter(formatter)
     log.addHandler(sh)
-    fh = logging.FileHandler("log/cuckoo.log")
+    fh = logging.FileHandler(os.path.join("log", "cuckoo.log"))
     fh.setFormatter(formatter)
     log.addHandler(fh)
     log.setLevel(logging.INFO)
