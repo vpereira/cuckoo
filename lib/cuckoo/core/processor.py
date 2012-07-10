@@ -2,6 +2,7 @@
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
+import copy
 import logging
 import pkgutil
 
@@ -63,7 +64,7 @@ class Processor:
                 continue
 
             try:
-                if current.run(results):
+                if current.run(copy.deepcopy(results)):
                     matched = {"name" : current.name,
                                "description" : current.description,
                                "severity" : current.severity,
@@ -75,6 +76,7 @@ class Processor:
             except NotImplementedError:
                 continue
 
+        sigs.sort(key=lambda key: key["severity"])
         results["signatures"] = sigs
 
         return results

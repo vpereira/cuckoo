@@ -16,9 +16,6 @@ cuckoo.conf
 The first file to edit is *conf/cuckoo.conf*, whose content is::
 
     [cuckoo]
-    # Enable or disable debug logging [on/off].
-    debug = off
-
     # Set the default analysis timeout expressed in seconds. This value will be
     # used to define after how many seconds the analysis will terminate unless
     # otherwise specified at submission.
@@ -125,14 +122,22 @@ It contains the following sections::
     [pickled]
     enabled = on
 
-    [mongodb]
-    enabled = on
-
     [metadata]
     enabled = on
 
     [maec11]
     enabled = on
+
+    [mongodb]
+    enabled = off
+
+    [hpfclient]
+    enabled = off
+    host = 
+    port = 10000
+    ident = 
+    secret = 
+    channel = 
 
 By setting those option to *on* or *off* you enable or disable the generation
 of such reports.

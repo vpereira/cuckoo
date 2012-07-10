@@ -68,7 +68,7 @@ def create_structure():
                "storage/analyses",
                "storage/binaries"]
 
-    create_folders(folders=folders)
+    create_folders(root=CUCKOO_ROOT,folders=folders)
 
 def init_logging():
     """Initialize logging."""
@@ -76,7 +76,7 @@ def init_logging():
     sh = logging.StreamHandler()
     sh.setFormatter(formatter)
     log.addHandler(sh)
-    fh = logging.FileHandler(os.path.join("log", "cuckoo.log"))
+    fh = logging.FileHandler(os.path.join(CUCKOO_ROOT, "log", "cuckoo.log"))
     fh.setFormatter(formatter)
     log.addHandler(fh)
     log.setLevel(logging.INFO)

@@ -18,6 +18,7 @@ from lib.cuckoo.core.guest import GuestManager
 from lib.cuckoo.core.sniffer import Sniffer
 from lib.cuckoo.core.processor import Processor
 from lib.cuckoo.core.reporter import Reporter
+from lib.cuckoo.common.constants import CUCKOO_ROOT
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class AnalysisManager(Thread):
     def init_storage(self):
         """Initialize analyses storage folder.
         @raise CuckooAnalysisError: if storage folder already exists."""
-        self.analysis.results_folder = os.path.join(os.path.join(os.getcwd(), "storage", "analyses"), str(self.task.id))
+        self.analysis.results_folder = os.path.join(os.path.join(CUCKOO_ROOT, "storage", "analyses"), str(self.task.id))
 
         if os.path.exists(self.analysis.results_folder):
             raise CuckooAnalysisError("Analysis results folder already exists at path \"%s\", analysis aborted" % self.analysis.results_folder)
@@ -49,7 +50,7 @@ class AnalysisManager(Thread):
         """Store sample file.
         @raise CuckooAnalysisError: if unable to store file."""
         md5 = File(self.task.file_path).get_md5()
-        self.analysis.stored_file_path = os.path.join(os.path.join(os.getcwd(), "storage", "binaries"), md5)
+        self.analysis.stored_file_path = os.path.join(CUCKOO_ROOT, "storage", "binaries", md5)
 
         if os.path.exists(self.analysis.stored_file_path):
             log.info("File already exists at \"%s\"" % self.analysis.stored_file_path)
@@ -71,17 +72,20 @@ class AnalysisManager(Thread):
         """
         options = {}
 
-        if self.task.timeout:
-            timeout = self.task.timeout
-        else:
-            timeout = self.cfg.cuckoo.analysis_timeout
-
         options["file_path"] = self.task.file_path
+        options["package"] = self.task.package
+        options["machine"] = self.task.machine
+        options["platform"] = self.task.platform
+        options["options"] = self.task.options
+        options["custom"] = self.task.custom
+
+        if not self.task.timeout or self.task.timeout == 0:
+            options["timeout"] = self.cfg.cuckoo.analysis_timeout
+        else:
+            options["timeout"] = self.task.timeout
+
         options["file_name"] = File(self.task.file_path).get_name()
         options["file_type"] = File(self.task.file_path).get_type()
-        options["package"] = self.task.package
-        options["options"] = self.task.options
-        options["timeout"] = timeout
         options["started"] = time.time()
 
         return options
@@ -101,7 +105,7 @@ class AnalysisManager(Thread):
 
         while True:
             machine_lock.acquire()
-            vm = mmanager.acquire(label=self.task.machine, platform=self.task.platform)
+            vm = mmanager.acquire(machine_id=self.task.machine, platform=self.task.platform)
             machine_lock.release()
             if not vm:
                 log.debug("No machine available")
@@ -141,6 +145,7 @@ class AnalysisManager(Thread):
             mmanager.stop(vm.label)
             # Release the machine from lock
             mmanager.release(vm.label)
+
         # Launch reports generation
         Reporter(self.analysis.results_folder).run(Processor(self.analysis.results_folder).run())
 
@@ -176,7 +181,9 @@ class Scheduler:
         """Initialize machine manager."""
         global mmanager
 
+        log.info("Using \"%s\" machine manager" % self.cfg.cuckoo.machine_manager)
         name = "modules.machinemanagers.%s" % self.cfg.cuckoo.machine_manager
+
         try:
             __import__(name, globals(), locals(), ["dummy"], -1)
         except ImportError as e:
@@ -204,11 +211,13 @@ class Scheduler:
                 try:
                     mmanager.stop(machine.label)
                 except CuckooMachineError as e:
-                    log.error("Unble to shudown machine %s, please check manually. Error: %s" % (machine.label, e.message))
+                    log.error("Unable to shutdown machine %s, please check manually. Error: %s" % (machine.label, e.message))
 
     def start(self):
         """Start scheduler."""
         self.initialize()
+
+        log.info("Waiting for analysis tasks...")
 
         while self.running:
             time.sleep(1)

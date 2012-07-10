@@ -6,7 +6,7 @@ import os
 import ConfigParser
 
 from lib.cuckoo.common.exceptions import CuckooMachineError
-
+from lib.cuckoo.common.constants import CUCKOO_ROOT
 
 class Dictionary(dict):
     """Cuckko custom dict."""
@@ -32,7 +32,7 @@ class MachineManager(object):
         @param module_name: module name.
         """
         self.module_name = module_name
-        self.config_path = os.path.join("conf", "%s.conf" % module_name)
+        self.config_path = os.path.join(CUCKOO_ROOT, "conf", "%s.conf" % module_name)
         self.config.read(self.config_path)
 
         machines_list = self.config.get(self.module_name, "machines").strip().split(",")
@@ -50,7 +50,7 @@ class MachineManager(object):
             configured_vm = self._list()
             for machine in self.machines:
                 if machine.label not in configured_vm:
-                    raise CuckooMachineError("Configured VM %s was not detected or not in proper state" % machine.label)
+                    raise CuckooMachineError("Configured machine %s was not detected or it's not in proper state" % machine.label)
         except NotImplementedError:
             pass
 
@@ -65,15 +65,15 @@ class MachineManager(object):
 
         return count
 
-    def acquire(self, label=None, platform=None):
+    def acquire(self, machine_id=None, platform=None):
         """Acquire a machine to start analysis.
-        @param label: machine name.
+        @param machine_id: machine ID.
         @param platform: machine platform.
         @return: machine or None.
         """
-        if label:
+        if machine_id:
             for machine in self.machines:
-                if machine.label == label and not machine.locked:
+                if machine.id == machine_id and not machine.locked:
                     machine.locked = True
                     return machine
         elif platform:
@@ -100,7 +100,7 @@ class MachineManager(object):
 
     def running(self):
         """Returns running virutal machines.
-        @return: runninv virtual machines list.
+        @return: running virtual machines list.
         """
         return [m for m in self.machines if m.locked]
 
@@ -136,13 +136,13 @@ class Processing(object):
         @param analysis_path: analysis folder path.
         """
         self.analysis_path = analysis_path
-        self.log_path = os.path.join(analysis_path, "analysis.log")
-        self.conf_path = os.path.join(analysis_path, "analysis.conf")
-        self.file_path = os.path.join(analysis_path, "binary")
-        self.dropped_path = os.path.join(analysis_path, "files")
-        self.logs_path = os.path.join(analysis_path, "logs")
-        self.shots_path = os.path.join(analysis_path, "shots")
-        self.pcap_path = os.path.join(analysis_path, "dump.pcap")
+        self.log_path = os.path.join(self.analysis_path, "analysis.log")
+        self.conf_path = os.path.join(self.analysis_path, "analysis.conf")
+        self.file_path = os.path.realpath(os.path.join(self.analysis_path, "binary"))
+        self.dropped_path = os.path.join(self.analysis_path, "files")
+        self.logs_path = os.path.join(self.analysis_path, "logs")
+        self.shots_path = os.path.join(self.analysis_path, "shots")
+        self.pcap_path = os.path.join(self.analysis_path, "dump.pcap")
 
     def run(self):
         """Start processing.
@@ -156,6 +156,7 @@ class Signature(object):
     name = ""
     description = ""
     severity = 1
+    authors = []
     references = []
     alert = False
     enabled = True
@@ -183,6 +184,7 @@ class Report(object):
         @param analysis_path: analysis folder path.
         """
         self.analysis_path = analysis_path
+        self.conf_path = os.path.join(self.analysis_path, "analysis.conf")
         self.reports_path = os.path.join(self.analysis_path, "reports")
 
         if not os.path.exists(self.reports_path):

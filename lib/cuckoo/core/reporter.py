@@ -6,11 +6,12 @@ import os
 import inspect
 import pkgutil
 import logging
+import copy
 
 from lib.cuckoo.common.constants import CUCKOO_ROOT
 from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.abstracts import Report
-from lib.cuckoo.common.exceptions import CuckooReportError
+from lib.cuckoo.common.exceptions import CuckooDependencyError, CuckooReportError
 import modules.reporting as plugins
 
 log = logging.getLogger(__name__)
@@ -45,7 +46,11 @@ class Reporter:
                 continue
 
             path = "%s.%s" % (plugins.__name__, name)
-            __import__(path, globals(), locals(), ["dummy"], -1)
+
+            try:
+                __import__(path, globals(), locals(), ["dummy"], -1)
+            except CuckooDependencyError as e:
+                log.warning("Unable to import reporting module \"%s\": %s" % (name, e.message))
 
     def run(self, data):
         """Generates all reports.
@@ -57,12 +62,16 @@ class Reporter:
         for plugin in Report.__subclasses__():
             current = plugin()
             current.set_path(self.analysis_path)
+            current.cfg = Config(current.conf_path)
             module = inspect.getmodule(current)
             module_name = module.__name__.rsplit(".", 1)[1]
             current.set_options(self.cfg.get(module_name))
 
             try:
-                current.run(data)
+                # Run report, for each report a brand new copy of results is
+                # created, to prevent a reporting module to edit global 
+                # result set and affect other reporting modules.
+                current.run(copy.deepcopy(data))
                 log.debug("Executed reporting module \"%s\"" % current.__class__.__name__)
             except NotImplementedError:
                 continue

@@ -6,20 +6,19 @@ from lib.common.abstracts import Package
 from lib.api.process import Process
 
 class IE(Package):
-  """IE analysis package."""
+    """Internet Explorer analysis package."""
 
-  def run(self, path):
-    arg = "\"%s\"" % path
-    p = Process()
-    p.execute(path="C:\\Program Files\\Internet Explorer\\IEXPLORE.EXE", args=arg, suspended=True)
-    p.inject()
-    p.resume()
+    def start(self, path):
+        arg = "\"%s\"" % path
+        p = Process()
+        p.execute(path="C:\\Program Files\\Internet Explorer\\iexplore.exe", args=arg, suspended=True)
+        p.inject()
+        p.resume()
 
-    return p.pid
+        return p.pid
 
-  def check(self):
-    return True
+    def check(self):
+        return True
 
-  def finish(self):
-    return True
-
+    def finish(self):
+        return True

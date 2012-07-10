@@ -34,6 +34,9 @@ def add_file(file_path):
     if file_path.startswith("\\\\.\\"):
         return
 
+    if file_path.startswith("\\??\\"):
+        file_path = file_path[4:]
+
     if os.path.exists(file_path):
         if file_path not in FILES_LIST:
             log.info("Added new file to list with path: %s" % file_path)
@@ -78,25 +81,31 @@ class PipeHandler(Thread):
         """Run handler.
         @return: operation status.
         """
-        data = create_string_buffer(BUFSIZE)
+        data = ""
 
         while True:
             bytes_read = c_int(0)
 
+            buf = create_string_buffer(BUFSIZE)
             success = KERNEL32.ReadFile(self.h_pipe,
-                                        data,
-                                        sizeof(data),
+                                        buf,
+                                        sizeof(buf),
                                         byref(bytes_read),
                                         None)
 
-            if not success or bytes_read.value == 0:
-                if KERNEL32.GetLastError() == ERROR_BROKEN_PIPE:
-                    pass
-                break
+            data += buf.value
+
+            if not success and KERNEL32.GetLastError() == ERROR_MORE_DATA:
+                continue
+            #elif not success or bytes_read.value == 0:
+            #    if KERNEL32.GetLastError() == ERROR_BROKEN_PIPE:
+            #        pass
+            
+            break
 
         if data:
-            command = data.value.strip()
-                
+            command = data.strip()
+
             if command.startswith("PID:"):
                 pid = command[4:]
                 if pid.isdigit():
@@ -105,6 +114,11 @@ class PipeHandler(Thread):
                         add_pids(pid)
                         proc = Process(pid=pid)
                         proc.inject()
+                        KERNEL32.WriteFile(self.h_pipe,
+                                           create_string_buffer("OK"),
+                                           2,
+                                           byref(bytes_read),
+                                           None)
             elif command.startswith("FILE:"):
                 file_path = command[5:]
                 add_file(file_path)
@@ -177,7 +191,7 @@ class Analyzer:
         @return: options dict.
         """
         options = {}
-        if self.config.options != "None":
+        if not self.config.options:
             try:
                 fields = self.config.options.strip().split(",")
                 for field in fields:
@@ -207,12 +221,13 @@ class Analyzer:
         """
         self.prepare()
 
-        # TODO: checking for "None" string sucks, need to find a fix
-        if self.config.package == "None":
+        if not self.config.package:
             log.info("No analysis package specified, trying to detect it automagically")
             package = choose_package(self.config.file_type)
             if not package:
                 raise CuckooError("No valid package available for file type: %s" % self.config.file_type)
+            else:
+                log.info("Automatically selected analysis package \"%s\"" % package)
         else:
             package = self.config.package
 
@@ -224,7 +239,12 @@ class Analyzer:
             raise CuckooError("Unable to import package \"%s\", does not exist." % package_name)
 
         Package()
-        package_class = Package.__subclasses__()[0]
+
+        try:
+            package_class = Package.__subclasses__()[0]
+        except IndexError as e:
+            raise CuckooError("Unable to select package class (package=%s): %s" % (package_name, e.message))
+        
         pack = package_class(self.get_options())
 
         timer = Timer(self.config.timeout, self.stop)
@@ -234,7 +254,7 @@ class Analyzer:
         shots.start()
 
         try:
-            pids = pack.run(self.file_path)
+            pids = pack.start(self.file_path)
         except NotImplementedError:
             raise CuckooError("The package \"%s\" doesn't contain a run function." % package_name)
 
